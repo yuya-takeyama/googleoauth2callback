@@ -28,7 +28,7 @@ This package is useful when you need to:
 
    - Click the download button (JSON) for your created credentials
    - Save the downloaded file as `credentials.json` in your project root directory
-   - Add `credentials.json` to your `.gitignore` file to exclude it from version control
+   - Add both `credentials.json` and `token.json` to your `.gitignore` file to exclude them from version control
 
 ### Example
 
