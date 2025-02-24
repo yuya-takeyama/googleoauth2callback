@@ -207,7 +207,9 @@ func (o *OAuth2Callback) authenticate() error {
 		}
 	}()
 
-	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	authURL := config.AuthCodeURL("state-token",
+		oauth2.AccessTypeOffline,
+		oauth2.ApprovalForce)
 	fmt.Fprintln(os.Stderr, "Authenticate this app by visiting this url:")
 	fmt.Fprintln(os.Stderr, authURL)
 
