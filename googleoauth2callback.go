@@ -2,6 +2,8 @@ package googleoauth2callback
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -146,6 +148,14 @@ func (o *OAuth2Callback) createOAuth2Config() (*oauth2.Config, error) {
 	return config, nil
 }
 
+func generateStateToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
 func (o *OAuth2Callback) authenticate() error {
 	port, callbackPath, err := o.parseRedirectURL()
 	if err != nil {
@@ -159,8 +169,20 @@ func (o *OAuth2Callback) authenticate() error {
 
 	done := make(chan error)
 
+	stateToken, err := generateStateToken()
+	if err != nil {
+		return fmt.Errorf("failed to generate state token: %v", err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc(callbackPath, func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+		if state != stateToken {
+			http.Error(w, "Invalid state token", http.StatusBadRequest)
+			done <- fmt.Errorf("invalid state token")
+			return
+		}
+
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			http.Error(w, "Code not found", http.StatusBadRequest)
@@ -207,7 +229,7 @@ func (o *OAuth2Callback) authenticate() error {
 		}
 	}()
 
-	authURL := config.AuthCodeURL("state-token",
+	authURL := config.AuthCodeURL(stateToken,
 		oauth2.AccessTypeOffline,
 		oauth2.ApprovalForce)
 	fmt.Fprintln(os.Stderr, "Authenticate this app by visiting this url:")
