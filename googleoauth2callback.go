@@ -222,11 +222,13 @@ func (o *OAuth2Callback) authenticate() error {
 		Handler: mux,
 	}
 
+	serverError := make(chan error, 1)
 	go func() {
 		fmt.Fprintf(os.Stderr, "Starting server on port %s\n", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Fprintf(os.Stderr, "ListenAndServe error: %v\n", err)
+			serverError <- fmt.Errorf("ListenAndServe error: %v", err)
 		}
+		close(serverError)
 	}()
 
 	authURL := config.AuthCodeURL(stateToken,
@@ -237,10 +239,20 @@ func (o *OAuth2Callback) authenticate() error {
 
 	err = <-done
 
-	ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if errShutdown := srv.Shutdown(ctxShutdown); errShutdown != nil {
-		fmt.Fprintf(os.Stderr, "Server shutdown error: %+v\n", errShutdown)
+	if err := srv.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "Server close error: %v\n", err)
 	}
+
+	ctxShutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if errShutdown := srv.Shutdown(ctxShutdown); errShutdown != nil && errShutdown != context.DeadlineExceeded {
+		fmt.Fprintf(os.Stderr, "Server shutdown error: %v\n", errShutdown)
+	}
+
+	if serverErr := <-serverError; serverErr != nil {
+		fmt.Fprintf(os.Stderr, "Server error: %v\n", serverErr)
+	}
+
 	return err
 }
